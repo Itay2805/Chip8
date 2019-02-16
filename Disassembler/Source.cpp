@@ -5,10 +5,12 @@
 #include <iostream>
 #include <fstream>
 #include <iomanip>
+#include <vector>
 #include <string>
-#include <queue>
+#include <deque>
 
 #include <Opcode.h>
+#include <Util.h>
 
 using namespace chip8;
 
@@ -16,14 +18,19 @@ static bool show_address = true;
 static bool show_color = false;
 static bool show_bytecode = false;
 
-static bool ShouldContinue(const Opcode& opcode) {
-	switch (opcode.Type()) {
+static bool ShouldContinue(const Opcode& prev, const Opcode& opcode) {
+	if (prev.Type() == OpcodeType::SE || prev.Type() == OpcodeType::SNE) {
+		return true;
+	}
+	else {
+		switch (opcode.Type()) {
 		case OpcodeType::JP:
-		case OpcodeType::JP_I:
+		case OpcodeType::JP_V0:
 		case OpcodeType::RET:
 			return false;
 		default:
 			return true;
+		}
 	}
 }
 
@@ -38,37 +45,23 @@ static void resetColor() {
 }
 
 static void PrintRegister(Register reg) {
-	setColor(0xC65440);
-	switch (reg) {
-		case Register::V0: std::cout << "V0"; break;
-		case Register::V1: std::cout << "V1"; break;
-		case Register::V2: std::cout << "V2"; break;
-		case Register::V3: std::cout << "V3"; break;
-		case Register::V4: std::cout << "V4"; break;
-		case Register::V5: std::cout << "V5"; break;
-		case Register::V6: std::cout << "V6"; break;
-		case Register::V7: std::cout << "V7"; break;
-		case Register::V8: std::cout << "V8"; break;
-		case Register::V9: std::cout << "V9"; break;
-		case Register::VA: std::cout << "VA"; break;
-		case Register::VB: std::cout << "VB"; break;
-		case Register::VC: std::cout << "VC"; break;
-		case Register::VD: std::cout << "VD"; break;
-		case Register::VE: std::cout << "VE"; break;
-		case Register::VF: std::cout << "VF"; break;
-		case Register::I:  std::cout << "I"; break;
-		case Register::DT: std::cout << "DT"; break;
-		case Register::ST: std::cout << "ST"; break;
-		case Register::PC: std::cout << "<PC>"; break;
-		case Register::SP: std::cout << "<SP>"; break;
-		default: setColor(0xFF0000);  std::cout << "<invalid-reg>"; break;
+	if (reg < Register::PC) {
+		setColor(0xC65440);
 	}
+	else {
+		setColor(0xFF0000);		
+	}
+	std::cout << reg;
 }
 
-static void PrintOperand(const Operand& operand, bool hex = false) {
+static void PrintOperand(const Operand& operand) {
+	if (operand.IsMemory()) {
+		resetColor();
+		std::cout << "[";
+	}
 	switch (operand.GetType()) {
 		case OperandType::IMMEDIATE: {
-			if (hex) {
+			if (operand.IsAddress()) {
 				setColor(0xBD8EBD);
 				std::cout << std::setfill('0') << std::setw(3) << std::hex << operand.AsImmediate();
 			}
@@ -81,122 +74,62 @@ static void PrintOperand(const Operand& operand, bool hex = false) {
 			PrintRegister(operand.AsRegister());
 		} break;
 	};
+	if (operand.IsMemory()) {
+		resetColor();
+		std::cout << "]";
+	}
 }
 
 // TODO: This has alot of code duplication
 static void PrintOpcode(const Opcode& opcode) {
-	setColor(0x4481B8);
 	switch (opcode.Type()) {
-		case OpcodeType::CLS: std::cout << "CLS" << std::endl; break;
-		case OpcodeType::RET: std::cout << "RET" << std::endl; break;
-		case OpcodeType::JP: {
-			std::cout << "JP ";
-			PrintOperand(opcode.Operand1(), true);
+		case OpcodeType::CLS:
+		case OpcodeType::RET:	
+			setColor(0x4481B8);
+			std::cout << opcode.Type() << " ";
+			break;
+		case OpcodeType::SYS:
+		case OpcodeType::CALL:
+		case OpcodeType::JP:
+		case OpcodeType::SKP: 
+		case OpcodeType::SKNP: {
+			setColor(0x4481B8);
+			std::cout << opcode.Type() << " ";
+			PrintOperand(opcode.Operand1());
 			std::cout << std::endl;
 		} break;
-		case OpcodeType::CALL: {
-			std::cout << "CALL ";
-			PrintOperand(opcode.Operand1(), true);
-			std::cout << std::endl;
-		} break;
-		case OpcodeType::SE: {
-			std::cout << "SE ";
+		case OpcodeType::SE:
+		case OpcodeType::SNE:
+		case OpcodeType::LD:
+		case OpcodeType::ADD:
+		case OpcodeType::OR:
+		case OpcodeType::AND:
+		case OpcodeType::XOR:
+		case OpcodeType::SUB: 
+		case OpcodeType::SHR: 
+		case OpcodeType::SUBN: 
+		case OpcodeType::SHL:
+		case OpcodeType::RND: {
+			setColor(0x4481B8);
+			std::cout << opcode.Type() << " ";
 			PrintOperand(opcode.Operand1());
 			resetColor();
 			std::cout << ", ";
 			PrintOperand(opcode.Operand2());
 			std::cout << std::endl;
 		} break;
-		case OpcodeType::SNE: {
-			std::cout << "SNE ";
-			PrintOperand(opcode.Operand1());
-			resetColor();
-			std::cout << ", ";
-			PrintOperand(opcode.Operand2());
-			std::cout << std::endl;
-		} break;
-		case OpcodeType::LD: {
-			std::cout << "LD ";
-			PrintOperand(opcode.Operand1());
-			resetColor();
-			std::cout << ", ";
-			PrintOperand(opcode.Operand2());
-			std::cout << std::endl;
-		} break;
-		case OpcodeType::ADD: {
-			std::cout << "ADD ";
-			PrintOperand(opcode.Operand1());
-			resetColor();
-			std::cout << ", ";
-			PrintOperand(opcode.Operand2());
-			std::cout << std::endl;
-		} break;
-		case OpcodeType::OR: {
-			std::cout << "OR ";
-			PrintOperand(opcode.Operand1());
-			resetColor();
-			std::cout << ", ";
-			PrintOperand(opcode.Operand2());
-			std::cout << std::endl;
-		} break;
-		case OpcodeType::XOR: {
-			std::cout << "XOR ";
-			PrintOperand(opcode.Operand1());
-			resetColor();
-			std::cout << ", ";
-			PrintOperand(opcode.Operand2());
-			std::cout << std::endl;
-		} break;
-		case OpcodeType::SUB: {
-			std::cout << "SUB ";
-			PrintOperand(opcode.Operand1());
-			resetColor();
-			std::cout << ", ";
-			PrintOperand(opcode.Operand2());
-			std::cout << std::endl;
-		} break;
-		case OpcodeType::SHR: {
-			std::cout << "SHR ";
-			PrintOperand(opcode.Operand1());
-			resetColor();
-			std::cout << ", ";
-			PrintOperand(opcode.Operand2());
-			std::cout << std::endl;
-		} break;
-		case OpcodeType::SUBN: {
-			std::cout << "SUBN ";
-			PrintOperand(opcode.Operand1());
-			resetColor();
-			std::cout << ", ";
-			PrintOperand(opcode.Operand2());
-			std::cout << std::endl;
-		} break;
-		case OpcodeType::SHL: {
-			std::cout << "SHL ";
-			PrintOperand(opcode.Operand1());
-			resetColor();
-			std::cout << ", ";
-			PrintOperand(opcode.Operand2());
-			std::cout << std::endl;
-		} break;
-		case OpcodeType::JP_I: {
-			std::cout << "JP ";
+		case OpcodeType::JP_V0: {
+			setColor(0x4481B8);
+			std::cout << opcode.Type() << " ";
 			PrintRegister(Register::V0);
 			resetColor();
 			std::cout << ", ";
 			PrintOperand(opcode.Operand1());
 			std::cout << std::endl;
 		} break;
-		case OpcodeType::RND: {
-			std::cout << "RND ";
-			PrintOperand(opcode.Operand1());
-			resetColor();
-			std::cout << ", ";
-			PrintOperand(opcode.Operand2());
-			std::cout << std::endl;
-		} break;
 		case OpcodeType::DRW: {
-			std::cout << "DRW ";
+			setColor(0x4481B8);
+			std::cout << opcode.Type() << " ";
 			PrintOperand(opcode.Operand1());
 			resetColor();
 			std::cout << ", ";
@@ -206,18 +139,9 @@ static void PrintOpcode(const Opcode& opcode) {
 			PrintOperand(opcode.Operand3());
 			std::cout << std::endl;
 		} break;
-		case OpcodeType::SKP: {
-			std::cout << "SKP ";
-			PrintOperand(opcode.Operand1());
-			std::cout << std::endl;
-		} break;
-		case OpcodeType::SKNP: {
-			std::cout << "SKNP ";
-			PrintOperand(opcode.Operand1());
-			std::cout << std::endl;
-		} break;
 		case OpcodeType::LD_FONT: {
-			std::cout << "LD ";
+			setColor(0x4481B8);
+			std::cout << opcode.Type() << " ";
 			setColor(0xCA9F52);
 			std::cout << "F";
 			resetColor();
@@ -225,28 +149,9 @@ static void PrintOpcode(const Opcode& opcode) {
 			PrintOperand(opcode.Operand1());
 			std::cout << std::endl;
 		} break;
-		case OpcodeType::LD_MEM_REG: {
-			std::cout << "LD ";
-			resetColor();
-			std::cout << "[";
-			PrintRegister(Register::I);
-			resetColor();
-			std::cout << "], ";
-			PrintOperand(opcode.Operand1());
-			std::cout << std::endl;
-		} break;
-		case OpcodeType::LD_REG_MEM: {
-			std::cout << "LD ";
-			PrintOperand(opcode.Operand1());
-			resetColor();
-			std::cout << ", [";
-			PrintRegister(Register::I);
-			resetColor();
-			std::cout << "]";
-			std::cout << std::endl;
-		} break;
-		case OpcodeType::BCD: {
-			std::cout << "LD ";
+		case OpcodeType::LD_BCD: {
+			setColor(0x4481B8);
+			std::cout << opcode.Type() << " ";
 			setColor(0xCA9F52);
 			std::cout << "B";
 			resetColor();
@@ -254,7 +159,10 @@ static void PrintOpcode(const Opcode& opcode) {
 			PrintOperand(opcode.Operand1());
 			std::cout << std::endl;
 		} break;
-		default: std::cout << "Invalid opcode" << std::endl;
+		default: {
+			setColor(0xFF0000);
+			std::cout << "<Missing opcode print for " << opcode.Type() << ">" << std::endl;
+		}
 	}
 }
 
@@ -263,11 +171,6 @@ static void PrintOpcodeBytes(uint16_t opcode) {
 		return;
 	}
 
-	// little endian, we need to swap
-	int n = 1;
-	if (*(char *)&n == 1) {
-		opcode = _byteswap_ushort(opcode);
-	}
 	setColor(0x99C792);
 	std::cout << std::setfill('0') << std::setw(2) << std::hex << (opcode >> 8) << " " << std::setfill('0') << std::setw(2) << std::hex << (opcode & 0xFF) << "\t";
 }
@@ -283,10 +186,10 @@ int main(int argc, const char* argv[]) {
 				if (strcmp(argv[i], "-color") == 0) {
 					show_color = true;
 				}
-				else if (argv[i], "-bytecode") {
+				else if (strcmp(argv[i], "-bytecode") == 0) {
 					show_bytecode = true;
 				}
-				else if (argv[i], "-no-address") {
+				else if (strcmp(argv[i], "-no-address") == 0) {
 					show_address = false;
 				}
 			}
@@ -300,59 +203,75 @@ int main(int argc, const char* argv[]) {
 		if (file.read(memory.data(), size))
 		{
 			std::vector<int> checked;
-			std::queue<int> addresses;
-			addresses.push(0x200);
+			std::deque<int> addresses;
+			addresses.push_back(0x200);
 			while (!addresses.empty()) {
 				int address = addresses.front();
-				addresses.pop();
+				addresses.pop_front();
+
 				if (address < 0x200) continue;
+				
 				if (std::find(checked.begin(), checked.end(), address) != checked.end()) continue;
+
 				resetColor();
 				std::cout << "<";
 				setColor(0xBD8EBD);
 				std::cout << std::setfill('0') << std::setw(3) << std::hex << address;
 				resetColor();
+				if (address % 2 != 0) {
+					std::cout << " [unaligned]";
+				}
 				std::cout << ">:" << std::endl;
 				checked.push_back(address);
+
+				Opcode prev(0);
 				Opcode opcode(0);
 				do {
+					bool over = false;
+
 					if (show_address) {
 						setColor(0xBD8EBD);
 						std::cout << std::setfill('0') << std::setw(3) << std::hex << address << "\t";
 					}
-					uint16_t opcode_byte = *(uint16_t*)&memory[address - 0x200];
-					PrintOpcodeBytes(opcode_byte);
-					try {
-						opcode = Opcode(opcode_byte);
+					
+					if (address > (memory.size() - 2) + 0x200) {
+						setColor(0xFF0000);
+						std::cout << "<Outside of range>";
+						break;
 					}
-					catch (...) {
+
+					uint16_t opcode_byte = ToBigEndian(*(uint16_t*)&memory[address - 0x200]);
+
+					PrintOpcodeBytes(opcode_byte);
+					prev = opcode;
+					try {
+						opcode = Opcode(opcode_byte, true);
+					}
+					catch (std::runtime_error err) {
+						setColor(0xFF0000);
+						std::cout << "<" << err.what() << ">" << std::endl;
 						opcode = Opcode(0);
 					}
+					if (opcode.Type() != OpcodeType::NONE) {
+						PrintOpcode(opcode);
+					}
 
-					PrintOpcode(opcode);
-
-					// catch up on flow control operators
+					// we want to checkout every place we jump into
 					switch (opcode.Type()) {
 						case OpcodeType::JP: {
 							if (opcode.Operand1().GetType() == OperandType::IMMEDIATE) {
-								addresses.push(opcode.Operand1().AsImmediate());
+								addresses.push_front(opcode.Operand1().AsImmediate());
 							}
 						} break;
 						case OpcodeType::CALL: {
 							if (opcode.Operand1().GetType() == OperandType::IMMEDIATE) {
-								addresses.push(opcode.Operand1().AsImmediate());
+								addresses.push_front(opcode.Operand1().AsImmediate());
 							}
-						} break;
-						case OpcodeType::SNE: {
-							addresses.push(address + 2);
-						} break;
-						case OpcodeType::SE: {
-							addresses.push(address + 2);
 						} break;
 					}
 
 					address += 2;
-				} while (ShouldContinue(opcode));
+				} while (ShouldContinue(prev, opcode));
 
 				std::cout << std::endl;
 				std::cout << std::endl;
