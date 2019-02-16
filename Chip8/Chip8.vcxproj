@@ -134,11 +134,16 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Formatter.h" />
     <ClInclude Include="Opcode.h" />
+    <ClInclude Include="Operand.h" />
     <ClInclude Include="Register.h" />
+    <ClInclude Include="Util.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Opcode.cpp" />
+    <ClCompile Include="Operand.cpp" />
+    <ClCompile Include="Register.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

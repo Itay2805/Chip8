@@ -1,94 +1,15 @@
 #pragma once
 
-#include <cstdint>
-
-#include "Register.h"
+#include "Operand.h"
 
 #include <exception>
+#include <string>
 
 namespace chip8 {
 
-	enum class OperandType {
-		NONE,
-		REGISTER,
-		IMMEDIATE
-	};
-
-	class Operand {
-	private:
-		OperandType type;
-		union {
-			Register reg;
-			uint16_t imm;
-		};
-
-	public:
-		Operand() 
-			: type(OperandType::NONE)
-			, imm(0)
-		{}
-
-		Operand(Register reg)
-			: type(OperandType::REGISTER)
-			, reg(reg)
-		{}
-
-		Operand(uint16_t imm)
-			: type(OperandType::IMMEDIATE)
-			, imm(imm)
-		{}
-
-		/*
-		Create a register Operand
-		*/
-		inline void Set(Register reg) {
-			type = OperandType::REGISTER;
-			this->reg = reg;
-		}
-
-		/*
-		Create an immediate Operand
-		*/
-		inline void Set(uint16_t imm) {
-			type = OperandType::IMMEDIATE;
-			this->imm = imm;
-		}
-
-		/*
-		Return the type of the Operand
-		*/
-		inline OperandType GetType() const { return type; }
-
-		/*
-		Return the register value of the Operand
-
-		will throw an exception if it is not a register
-		*/
-		inline Register AsRegister(bool onlyGeneralPurpose = false) const {
-			if (type != OperandType::REGISTER) {
-				throw std::exception("Tried to get Operand as register when it is not one");
-			}
-			if (onlyGeneralPurpose && reg > Register::VF) {
-				throw std::exception("Tried to get Operand as general purpose register when it is not one");
-			}
-			return reg;
-		}
-
-		/*
-		Return the immediate value of the Operand
-
-		will throw an exception if it is not an immediate
-		*/
-		inline uint16_t AsImmediate() const { 
-			if (type != OperandType::IMMEDIATE) {
-				throw std::exception("Tried to get Operand as immediate when it is not one");
-			}
-			return imm;
-		}
-
-	};
-
 	enum class OpcodeType {
+		NONE,
+
 		CLS,
 		RET,
 		JP,
@@ -104,31 +25,41 @@ namespace chip8 {
 		SHR,
 		SUBN,
 		SHL,
-		JP_I,
+		/*
+		Maybe combine with JP?
+		since in the end it is still defined as JP V0, <offset>
+		*/
+		JP_V0,
 		RND,
 		DRW,
 		SKP,
 		SKNP,
-		LD_FONT,
-		BCD,
 
-		// TODO: Add operand of mem
-		LD_MEM_REG,
-		LD_REG_MEM,
+		/* 
+		special cases for ld, 
+		since font and bcd are not actually registers
+		*/
+		LD_FONT,
+		LD_BCD,
 	};
+
+	std::ostream& operator<<(std::ostream& out, OpcodeType op);
 
 	class Opcode {
 	private:
 		OpcodeType type;
 		Operand op1;
 		Operand op2;
-
-		/* only needed for DRW opcode really */
 		Operand op3;
 
 	public:
-		/* will disassemble the given instruction (ignores if 0) */
-		Opcode(uint16_t bin);
+		/* 
+		will disassemble the given instruction
+		if 0 it will not do anything
+		if bigEndian is true, it will assume the given number is in big endian
+		otherwise it will first turn it to big endian
+		*/
+		Opcode(uint16_t bin = 0, bool bigEndian = false);
 
 		inline OpcodeType& Type() { return type; }
 		inline Operand& Operand1() { return op1; }
@@ -140,8 +71,12 @@ namespace chip8 {
 		inline Operand Operand2() const { return op2; }
 		inline Operand Operand3() const { return op3; }
 
-		/* will assemble this instruction */
-		uint16_t Assemble();
+		/* 
+		will assemble this instruction 
+		if bigEndian is true, will convert to big endian, otherwise
+		will leave at the native endianess
+		*/
+		uint16_t Assemble(bool bigEndian = true);
 
 	private:
 		/* The different layouts that can be assembled */
@@ -152,11 +87,17 @@ namespace chip8 {
 		uint16_t AssembleRegRegImm(uint8_t opcode) const;
 
 		/* The different layouts that can be disassembled */
-		void DisassembleImm(OpcodeType type, uint16_t opcode);
-		void DisassembleReg(OpcodeType type, uint16_t opcode);
+		void DisassembleImm(OpcodeType type, uint16_t opcode, bool addr = false);
+		void DisassembleReg(OpcodeType type, uint16_t opcode, bool mem = false);
 		void DisassembleRegImm(OpcodeType type, uint16_t opcode);
 		void DisassembleRegReg(OpcodeType type, uint16_t opcode);
 		void DisassembleRegRegImm(OpcodeType type, uint16_t opcode);
+
+		/*
+		Will print the opcode
+		*/
+		friend std::ostream& operator<<(std::ostream& out, Opcode opcode);
+
 	};
 
 }

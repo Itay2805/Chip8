@@ -1,6 +1,6 @@
 #pragma once
 
-#include <cstdint>
+#include <ostream>
 
 namespace chip8 {
 
@@ -32,14 +32,16 @@ namespace chip8 {
 		/* Stack pointer (not accesible) */
 		SP,
 
-		/* Sound counter */
+		/* Sound Timer */
 		ST,
 
-		/* Delay counter */
+		/* Delay Timer */
 		DT,
 
 		/* Register count */
 		COUNT
 	};
+
+	std::ostream& operator<<(std::ostream& out, const Register& r);
 
 }
