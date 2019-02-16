@@ -7,7 +7,7 @@
 #include <iomanip>
 #include <vector>
 #include <string>
-#include <deque>
+#include <stack>
 
 #include <Opcode.h>
 #include <Util.h>
@@ -22,15 +22,13 @@ static bool ShouldContinue(const Opcode& prev, const Opcode& opcode) {
 	if (prev.Type() == OpcodeType::SE || prev.Type() == OpcodeType::SNE) {
 		return true;
 	}
-	else {
-		switch (opcode.Type()) {
+	switch (opcode.Type()) {
 		case OpcodeType::JP:
 		case OpcodeType::JP_V0:
 		case OpcodeType::RET:
 			return false;
 		default:
 			return true;
-		}
 	}
 }
 
@@ -203,11 +201,11 @@ int main(int argc, const char* argv[]) {
 		if (file.read(memory.data(), size))
 		{
 			std::vector<int> checked;
-			std::deque<int> addresses;
-			addresses.push_back(0x200);
+			std::stack<int> addresses;
+			addresses.push(0x200);
 			while (!addresses.empty()) {
-				int address = addresses.front();
-				addresses.pop_front();
+				int address = addresses.top();
+				addresses.pop();
 
 				if (address < 0x200) continue;
 				
@@ -222,11 +220,11 @@ int main(int argc, const char* argv[]) {
 					std::cout << " [unaligned]";
 				}
 				std::cout << ">:" << std::endl;
-				checked.push_back(address);
 
 				Opcode prev(0);
 				Opcode opcode(0);
 				do {
+					checked.push_back(address);
 					bool over = false;
 
 					if (show_address) {
@@ -240,9 +238,10 @@ int main(int argc, const char* argv[]) {
 						break;
 					}
 
-					uint16_t opcode_byte = ToBigEndian(*(uint16_t*)&memory[address - 0x200]);
-
+					uint16_t opcode_byte = *(uint16_t*)&memory[address - 0x200];
+					opcode_byte = ToBigEndian(opcode_byte);
 					PrintOpcodeBytes(opcode_byte);
+
 					prev = opcode;
 					try {
 						opcode = Opcode(opcode_byte, true);
@@ -260,12 +259,12 @@ int main(int argc, const char* argv[]) {
 					switch (opcode.Type()) {
 						case OpcodeType::JP: {
 							if (opcode.Operand1().GetType() == OperandType::IMMEDIATE) {
-								addresses.push_front(opcode.Operand1().AsImmediate());
+								addresses.push(opcode.Operand1().AsImmediate());
 							}
 						} break;
 						case OpcodeType::CALL: {
 							if (opcode.Operand1().GetType() == OperandType::IMMEDIATE) {
-								addresses.push_front(opcode.Operand1().AsImmediate());
+								addresses.push(opcode.Operand1().AsImmediate());
 							}
 						} break;
 					}

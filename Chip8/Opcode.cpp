@@ -11,11 +11,11 @@ namespace chip8 {
 		, op2()
 		, op3()
 	{
-		if (!bigEndian) {
-			bin = ToBigEndian(bin);
-		}
-
 		if (bin != 0x0000) {
+			if (!bigEndian) {
+				bin = ToBigEndian(bin);
+			}
+
 			switch (bin) {
 				case 0x00E0: type = OpcodeType::CLS; break;
 				case 0x00EE: type = OpcodeType::RET; break;
