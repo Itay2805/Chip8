@@ -36,6 +36,9 @@ namespace chip8 {
 
 		inline bool IsMemory() const { return mem; }
 
+		inline bool IsAddress() const { return addr; }
+
+
 		/*
 		Return the register value of the Operand
 

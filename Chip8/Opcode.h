@@ -10,6 +10,7 @@ namespace chip8 {
 	enum class OpcodeType {
 		NONE,
 
+		SYS,
 		CLS,
 		RET,
 		JP,

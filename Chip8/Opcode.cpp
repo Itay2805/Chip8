@@ -1,6 +1,7 @@
 #include "Opcode.h"
 
 #include "Util.h"
+#include "Formatter.h"
 
 namespace chip8 {
 
@@ -21,6 +22,7 @@ namespace chip8 {
 				default: {
 					uint8_t opcodePrefix = bin >> 12;
 					switch (opcodePrefix) {
+						case 0x0: DisassembleImm(OpcodeType::SYS, bin, true); break;
 						case 0x1: DisassembleImm(OpcodeType::JP, bin, true); break;
 						case 0x2: DisassembleImm(OpcodeType::CALL, bin, true); break;
 						case 0x3: DisassembleRegImm(OpcodeType::SE, bin); break;
@@ -41,7 +43,7 @@ namespace chip8 {
 								case 0x7: DisassembleRegReg(OpcodeType::SUBN, bin); break;
 								case 0xe: DisassembleReg(OpcodeType::SHL, bin);  op1 = Operand((Register)((bin >> 8) | 0xF)); break;
 								default: {
-									throw std::runtime_error("Invalid opcode");
+									throw std::runtime_error(Formatter() << "Invalid opcode [prefix=" << std::hex << (int)opcodePrefix << ", suffix=" << std::hex << (int)suffix << "]");
 								} break;
 							}
 						} break;
@@ -54,9 +56,9 @@ namespace chip8 {
 							uint8_t suffix = bin & 0xFF;
 							switch (suffix) {
 								case 0x9e: DisassembleReg(OpcodeType::SKP, bin); break;
-								case 0xa1: DisassembleReg(OpcodeType::SKNP, bin); op1 = Operand((Register)((bin >> 8) | 0xF)); break;
+								case 0xa1: DisassembleReg(OpcodeType::SKNP, bin); break;
 								default: {
-									throw std::runtime_error("Invalid opcode");
+									throw std::runtime_error(Formatter() << "Invalid opcode [prefix=" << std::hex << (int)opcodePrefix << ", suffix=" << std::hex << (int)suffix << "]");
 								}
 							}
 						} break;
@@ -69,13 +71,16 @@ namespace chip8 {
 								case 0x1e: DisassembleReg(OpcodeType::ADD, bin);  op2 = op1; op1 = Operand(Register::I); break;
 								case 0x29: DisassembleReg(OpcodeType::LD_FONT, bin); break;
 								case 0x33: DisassembleReg(OpcodeType::LD_BCD, bin); break;
-								case 0x55: DisassembleReg(OpcodeType::LD, bin, true); break;
-								case 0x65: DisassembleReg(OpcodeType::LD, bin, true); break;
+								case 0x55: DisassembleReg(OpcodeType::LD, bin, true); op2 = op1; op1 = Operand(Register::I); break;
+								case 0x65: DisassembleReg(OpcodeType::LD, bin, false); op2 = Operand(Register::I, true); break;
 								default: {
-									throw std::runtime_error("Invalid opcode");
+									throw std::runtime_error(Formatter() << "Invalid opcode [prefix=" << std::hex << (int)opcodePrefix << ", suffix=" << std::hex << (int)suffix << "]");
 								}
 							}
 						} break;
+						default: {
+							throw std::runtime_error(Formatter() << "Invalid opcode [prefix=" << std::hex << (int)opcodePrefix << "]");
+						};
 					}
 				} break;
 			}
@@ -85,6 +90,7 @@ namespace chip8 {
 	uint16_t Opcode::Assemble(bool binEndian) {
 		uint16_t opcode = 0;
 		switch (type) {
+			case OpcodeType::SYS: opcode = AssembleImm(0x0); break;
 			case OpcodeType::CLS: opcode = 0x00E0; break;
 			case OpcodeType::RET: opcode = 0x00EE; break;
 			case OpcodeType::JP: opcode = AssembleImm(0x1); break;
@@ -222,6 +228,7 @@ namespace chip8 {
 
 	std::ostream& operator<<(std::ostream& out, OpcodeType op) {
 		switch (op) {
+			case OpcodeType::SYS: out << "SYS"; break;
 			case OpcodeType::CLS: out << "CLS"; break;
 			case OpcodeType::RET: out << "RET"; break;
 			case OpcodeType::JP_V0:
@@ -234,6 +241,7 @@ namespace chip8 {
 			case OpcodeType::LD: out << "LD"; break;
 			case OpcodeType::ADD: out << "ADD"; break;
 			case OpcodeType::OR: out << "OR"; break;
+			case OpcodeType::AND: out << "AND"; break;
 			case OpcodeType::XOR: out << "XOR"; break;
 			case OpcodeType::SUB: out << "SUB"; break;
 			case OpcodeType::SHR: out << "SHR"; break;
@@ -252,59 +260,25 @@ namespace chip8 {
 	std::ostream& operator<<(std::ostream& out, Opcode op) {
 		out << op.type;
 		switch (op.type) {
-			case OpcodeType::JP: {
+			case OpcodeType::SYS:
+			case OpcodeType::CALL:
+			case OpcodeType::JP:
+			case OpcodeType::SKP:
+			case OpcodeType::SKNP: {
 				out << op.op1;
 			} break;
-			case OpcodeType::CALL: {
-				out << op.op1;
-			} break;
-			case OpcodeType::SE: {
-				out << op.op1;
-				std::cout << ", ";
-				out << op.op2;
-			} break;
+			case OpcodeType::XOR:
+			case OpcodeType::AND:
+			case OpcodeType::OR:
+			case OpcodeType::ADD:
+			case OpcodeType::SUB:
+			case OpcodeType::SHR:
+			case OpcodeType::SUBN:
+			case OpcodeType::SHL:
+			case OpcodeType::RND:
+			case OpcodeType::LD:
+			case OpcodeType::SE:
 			case OpcodeType::SNE: {
-				out << op.op1;
-				std::cout << ", ";
-				out << op.op2;
-			} break;
-			case OpcodeType::LD: {
-				out << op.op1;
-				std::cout << ", ";
-				out << op.op2;
-			} break;
-			case OpcodeType::ADD: {
-				out << op.op1;
-				std::cout << ", ";
-				out << op.op2;
-			} break;
-			case OpcodeType::OR: {
-				out << op.op1;
-				std::cout << ", ";
-				out << op.op2;
-			} break;
-			case OpcodeType::XOR: {
-				out << op.op1;
-				std::cout << ", ";
-				out << op.op2;
-			} break;
-			case OpcodeType::SUB: {
-				out << op.op1;
-				std::cout << ", ";
-				out << op.op2;
-			} break;
-			case OpcodeType::SHR: {
-				out << op.op1;
-				std::cout << ", ";
-				out << op.op2;
-			} break;
-			case OpcodeType::SUBN: {
-				out << op.op1;
-				std::cout << ", ";
-				out << op.op2;
-
-			} break;
-			case OpcodeType::SHL: {
 				out << op.op1;
 				std::cout << ", ";
 				out << op.op2;
@@ -312,25 +286,6 @@ namespace chip8 {
 			case OpcodeType::JP_V0: {
 				out << Operand(Register::V0);
 				std::cout << ", ";
-				out << op.op1;
-			} break;
-			case OpcodeType::RND: {
-				out << op.op1;
-				std::cout << ", ";
-				out << op.op2;
-
-			} break;
-			case OpcodeType::DRW: {
-				out << op.op1;
-				std::cout << ", ";
-				out << op.op2;
-				std::cout << ", ";
-				out << op.op3;
-			} break;
-			case OpcodeType::SKP: {
-				out << op.op1;
-			} break;
-			case OpcodeType::SKNP: {
 				out << op.op1;
 			} break;
 			case OpcodeType::LD_FONT: {
@@ -342,6 +297,13 @@ namespace chip8 {
 				out << "B";
 				out << ",";
 				out << op.op1;
+			} break;
+			case OpcodeType::DRW: {
+				out << op.op1;
+				std::cout << ", ";
+				out << op.op2;
+				std::cout << ", ";
+				out << op.op3;
 			} break;
 		}
 		return out;

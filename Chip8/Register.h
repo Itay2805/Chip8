@@ -26,17 +26,17 @@ namespace chip8 {
 		/* Index register */
 		I,
 
-		/* Program counter (not accessible) */
-		PC,
-
-		/* Stack pointer (not accesible) */
-		SP,
-
 		/* Sound Timer */
 		ST,
 
 		/* Delay Timer */
 		DT,
+
+		/* Program counter (not accessible) */
+		PC,
+
+		/* Stack pointer (not accesible) */
+		SP,
 
 		/* Register count */
 		COUNT
